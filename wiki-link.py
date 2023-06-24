@@ -2,6 +2,8 @@
 
 import argparse
 import logging
+import os
+import pathlib
 
 
 def log_init(level: str) -> None:
@@ -11,11 +13,7 @@ def log_init(level: str) -> None:
     logging.basicConfig(level=numeric_level)
 
 
-def main(*, wiki_src: str, markdown_dest: str) -> None:
-    logging.info(f"wiki-sync'ing from {wiki_src} to {markdown_dest}")
-
-
-if __name__ == "__main__":
+def main() -> None:
     parser = argparse.ArgumentParser(
         prog="wiki-link",
         description="Renders DokuWiki from one place, to markdown in another",
@@ -25,5 +23,29 @@ if __name__ == "__main__":
     parser.add_argument("-l", "--log", default="info")
     args = parser.parse_args()
 
+    src_path = pathlib.Path(args.wiki_src_dir).expanduser()
+    if not src_path.is_dir():
+        logging.error("wiki src dir must be a directory")
+        exit(1)
+
+    dest_path = pathlib.Path(args.markdown_dest_dir).expanduser()
+    if not dest_path.is_dir():
+        dest_path.mkdir()
+
     log_init(args.log)
-    main(wiki_src=args.wiki_src_dir, markdown_dest=args.markdown_dest_dir)
+    crawl(src_dir=src_path, dest_dir=dest_path)
+
+
+def crawl(*, src_dir: pathlib.Path, dest_dir: pathlib.Path) -> None:
+    logging.info(f"wiki-sync'ing from {src_dir} to {dest_dir}")
+
+    for root, _, files in os.walk(src_dir, topdown=False):
+        for name in filter(lambda f: f.endswith(".txt"), files):
+            src_path = pathlib.Path(root, name)
+            dest_path = pathlib.Path(dest_dir, src_path.relative_to(src_dir))
+
+            logging.info(f"converting: {src_path} to {dest_path}")
+
+
+if __name__ == "__main__":
+    main()
