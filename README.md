@@ -28,6 +28,14 @@ Tada! Wiki content available in-game, nicely rendered, with very little code.
 [markup language]: https://www.dokuwiki.org/wiki:syntax
 [pandoc]: https://pandoc.org/
 
+## Usage
+
+* Install `pandoc`
+* `python3 -m venv .venv`
+* `source .venv/bin/activate`
+* `pip install -r requirements.txt`
+* `./wiki-link.py --help`
+
 ## Development
 
 * Install Python (we target 3.9 to match our crusty prod LTS OS).
