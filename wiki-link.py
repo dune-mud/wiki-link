@@ -57,8 +57,12 @@ def parse_args() -> argparse.Namespace:
         prog="wiki-link",
         description="Renders DokuWiki from one place, to markdown in another",
     )
-    parser.add_argument("wiki_src_dir")
-    parser.add_argument("markdown_dest_dir")
+    parser.add_argument(
+        "wiki_src_dir", help="directory with DokuWiki page content"
+    )
+    parser.add_argument(
+        "markdown_dest_dir", help="directory for Markdown page content"
+    )
     parser.add_argument(
         "-l", "--log", default="info", help="log level (info, debug, etc)"
     )
