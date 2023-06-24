@@ -38,7 +38,7 @@ Tada! Wiki content available in-game, nicely rendered, with very little code.
 
 ## Development
 
-* Install Python (we target 3.9 to match our crusty prod LTS OS).
+* Install Python (we target 3.8 to match our crusty prod LTS OS).
 * `python3 -m venv .venv`
 * `source .venv/bin/activate`
 * `pip install -r requirements.txt -r dev-requirements.txt`

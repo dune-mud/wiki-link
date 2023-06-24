@@ -43,6 +43,10 @@ def main() -> None:
             exit(1)
         pandoc_cmd = str(args.pandoc)
 
+    if not args.bulk and not args.watch:
+        logging.error("one of --bulk or --watch must be provided")
+        exit(1)
+
     if args.bulk:
         logging.info(f"bulk converting {src_path} to {dest_path}")
         crawl(src_dir=src_path, dest_dir=dest_path, pandoc_cmd=pandoc_cmd)
@@ -69,17 +73,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-b",
         "--bulk",
-        default=True,
         help="Bulk convert all src files at startup",
-        action=argparse.BooleanOptionalAction,
+        action="store_true",
+    )
+    parser.add_argument(
+        "--no-bulk",
+        dest="bulk",
+        help="Skip bulk converting all src files at startup",
+        action="store_false",
     )
     parser.add_argument(
         "-w",
         "--watch",
-        default=True,
         help="Watch src directory to auto-convert changed files",
-        action=argparse.BooleanOptionalAction,
+        action="store_true",
     )
+    parser.add_argument(
+        "--no-watch",
+        dest="watch",
+        help="Skip watching src directory to auto-convert changed files",
+        action="store_false",
+    )
+    parser.set_defaults(bulk=True, watch=True)
     parser.add_argument(
         "-p",
         "--pandoc",
