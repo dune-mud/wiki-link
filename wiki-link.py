@@ -8,6 +8,9 @@ import shlex
 import shutil
 import subprocess
 
+import watchdog.events
+import watchdog.observers
+
 
 def log_init(level: str) -> None:
     numeric_level = getattr(logging, level.upper(), None)
@@ -87,35 +90,123 @@ def crawl(
 ) -> None:
     for root, _, files in os.walk(src_dir, topdown=False):
         for name in filter(lambda f: f.endswith(".txt"), files):
-            src_path = pathlib.Path(root, name)
-            dest_path = pathlib.Path(dest_dir, src_path.relative_to(src_dir))
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            doku_file = pathlib.Path(root, name)
+            md_file = output_path(
+                src_dir=src_dir, dest_dir=dest_dir, path=doku_file
+            )
+            md_file.parent.mkdir(parents=True, exist_ok=True)
 
-            logging.info(f"converting: {src_path} to {dest_path}")
+            logging.info(f"converting: {doku_file} to {md_file}")
             pandoc_convert(
-                src_path=src_path, dest_path=dest_path, pandoc_cmd=pandoc_cmd
+                doku_file=doku_file, md_file=md_file, pandoc_cmd=pandoc_cmd
             )
 
 
 def watch(
     *, src_dir: pathlib.Path, dest_dir: pathlib.Path, pandoc_cmd: str
 ) -> None:
-    pass
+    event_handler = PandocEventHandler(
+        src_dir=src_dir, dest_dir=dest_dir, pandoc_cmd=pandoc_cmd
+    )
+    observer = watchdog.observers.Observer()
+    observer.schedule(event_handler, str(src_dir), recursive=True)
+    observer.start()
+    try:
+        while observer.is_alive():
+            observer.join(1)
+    except KeyboardInterrupt:
+        logging.info("exiting for keyboard interrupt")
+    finally:
+        observer.stop()
+        observer.join()
+
+
+class PandocEventHandler(watchdog.events.FileSystemEventHandler):
+    def __init__(
+        self, src_dir: pathlib.Path, dest_dir: pathlib.Path, pandoc_cmd: str
+    ):
+        super().__init__()
+
+        self.src_dir = src_dir
+        self.dest_dir = dest_dir
+        self.pandoc_cmd = pandoc_cmd
+
+    def on_moved(self, event: watchdog.events.FileMovedEvent) -> None:
+        super().on_moved(event)
+        # K.I.S.S - we don't expect DokuWiki to atomically move pages,
+        # just create new ones and remove old ones.
+
+    def on_created(self, event: watchdog.events.FileCreatedEvent) -> None:
+        super().on_created(event)
+
+        event_path = pathlib.Path(event.src_path)
+        out_path = output_path(
+            src_dir=self.src_dir, dest_dir=self.dest_dir, path=event_path
+        )
+        if event.is_directory:
+            logging.info(f"creating dir {out_path}")
+            out_path.mkdir(parents=True, exist_ok=True)
+        else:
+            logging.info(f"converting {event_path} to {out_path}")
+            pandoc_convert(
+                doku_file=event_path,
+                md_file=out_path,
+                pandoc_cmd=self.pandoc_cmd,
+            )
+
+    def on_deleted(self, event: watchdog.events.FileDeletedEvent) -> None:
+        super().on_deleted(event)
+
+        event_path = pathlib.Path(event.src_path)
+        out_path = output_path(
+            src_dir=self.src_dir, dest_dir=self.dest_dir, path=event_path
+        )
+        logging.info(f"deleting {out_path}")
+        if event.is_directory:
+            shutil.rmtree(out_path, ignore_errors=True)
+        else:
+            out_path.unlink(missing_ok=True)
+
+    def on_modified(self, event: watchdog.events.FileModifiedEvent) -> None:
+        super().on_modified(event)
+        if event.is_directory:
+            return
+
+        event_path = pathlib.Path(event.src_path)
+        out_path = output_path(
+            src_dir=self.src_dir, dest_dir=self.dest_dir, path=event_path
+        )
+        logging.info(f"converting {event_path} to {out_path}")
+        pandoc_convert(
+            doku_file=event_path,
+            md_file=out_path,
+            pandoc_cmd=self.pandoc_cmd,
+        )
+
+
+def output_path(
+    *,
+    src_dir: pathlib.Path,
+    dest_dir: pathlib.Path,
+    path: pathlib.Path,
+) -> pathlib.Path:
+    dest_path = pathlib.Path(dest_dir, path.relative_to(src_dir))
+    return dest_path
 
 
 def pandoc_convert(
-    *, src_path: pathlib.Path, dest_path: pathlib.Path, pandoc_cmd: str
+    *, doku_file: pathlib.Path, md_file: pathlib.Path, pandoc_cmd: str
 ) -> None:
-    cmd = f"{pandoc_cmd} --from=dokuwiki  --to=gfm {src_path}"
+    cmd = f"{pandoc_cmd} --from=dokuwiki --to=gfm {doku_file}"
     logging.debug(f"running: {cmd}")
     try:
         proc = subprocess.run(
             shlex.split(cmd), shell=False, capture_output=True, check=True
         )
-        with open(dest_path, "wb+") as f:
+        with open(md_file, "wb+") as f:
             f.write(proc.stdout)
     except subprocess.CalledProcessError:
-        logging.error(f"failed to convert {src_path}")
+        logging.error(f"failed to convert {doku_file}")
 
 
 if __name__ == "__main__":
