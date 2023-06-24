@@ -1,0 +1,32 @@
+name: CI
+permissions:
+  contents: read
+on:
+  pull_request:
+  push:
+env:
+  PYTHON_VERSION: "3.9"
+jobs:
+  linting:
+    runs-on: ubuntu-latest
+    name: Lint
+    steps:
+      - name: Check out source repository
+        uses: actions/checkout@v3
+      - name: Set up Python environment
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip' # caching pip dependencies
+      - name: Install Python requirements.
+        run: pip install -r requirements.txt dev-requirements.txt
+      - name: Black Format
+        uses: psf/black@stable
+      - name: isort
+        uses: isort/isort-action@master
+        with:
+            requirementsFiles: "requirements.txt dev-requirements.txt"
+      - name: flake8 Lint
+        uses: py-actions/flake8@v2
+      - name: mypy Typecheck
+        run: mypy .
